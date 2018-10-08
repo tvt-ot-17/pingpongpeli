@@ -14,22 +14,18 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.support.v7.widget.LinearLayoutManager;
-import android.support.v7.widget.RecyclerView;
 import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.ListView;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.UUID;
 
-public class MainActivity extends AppCompatActivity {
+public class ConnectActivity extends AppCompatActivity {
 
     private static int REQUEST_ENABLE_BT = 0;
     private static int REQUEST_ASK_COARSE_LOCATION = 1;
@@ -194,7 +190,7 @@ public class MainActivity extends AppCompatActivity {
         bluetoothSocket = socket;
         this.isServer = isServer;
 
-        Intent intent = new Intent(MainActivity.this, TransferActivity.class);
+        Intent intent = new Intent(ConnectActivity.this, TransferActivity.class);
         startActivity(intent);
     }
 
