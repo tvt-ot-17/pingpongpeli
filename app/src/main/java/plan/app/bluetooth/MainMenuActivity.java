@@ -1,4 +1,4 @@
-package e.jope.pingponguserinterface;
+package plan.app.bluetooth;
 
 import android.content.Intent;
 import android.support.v7.app.AppCompatActivity;
@@ -43,7 +43,7 @@ public class MainMenuActivity extends AppCompatActivity {
     }
 
     public void connectClicked(View v){
-        Intent myIntent = new Intent(MainMenuActivity.this, connectActivity.class);
+        Intent myIntent = new Intent(this, ConnectActivity.class);
         MainMenuActivity.this.startActivity(myIntent);
     }
 
@@ -51,7 +51,5 @@ public class MainMenuActivity extends AppCompatActivity {
         finish();
         System.exit(0);
     }
-
-
 
 }
