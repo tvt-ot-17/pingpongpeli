@@ -34,7 +34,7 @@ public class MainMenuActivity extends AppCompatActivity {
                 return true;
             case R.id.help:
                 //startActivity(new Intent(this, Help.class));
-                Toast.makeText(MainMenuActivity.this, "Help clicked",
+                Toast.makeText(MainMenuActivity.this, "Git gud nub",
                         Toast.LENGTH_LONG).show();
                 return true;
             default:
