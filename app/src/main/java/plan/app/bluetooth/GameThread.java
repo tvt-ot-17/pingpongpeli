@@ -110,11 +110,11 @@ public class GameThread extends Thread {
         scaleY = (screenHeight - statusbarHeight) / gameHeight;
 
         // starting parameters
-        batMove = 10;                    // bat moving speed
+        batMove = 20;                    // bat moving speed
         batWidth = 200;                 //
         batHeight = 15;                 //
         ballSide = 15;                  // ball width and height
-        ballSpeedDefault = 3;           // ball speed at spawn
+        ballSpeedDefault = 2;           // ball speed at spawn
         ballSpeedIncrease = 1;          // for each bat hit
         ballSpeedMax = 25;              // max speed. increase frame rate _when_ problems occur.
         score = 0;                      //
@@ -172,10 +172,10 @@ public class GameThread extends Thread {
             }
 
             ballMove();
+            collisionCheck();
 
             if (isServer) {
                 ballWiggle();
-                collisionCheck();
                 btSync();
                 batMove();
             }
@@ -505,14 +505,18 @@ public class GameThread extends Thread {
         if (ballY > gameHeight - ballSide) {
             Log.d("COLLISION", "death bottom");
 
-            score(OPPONENT);
+            if (isServer) {
+                score(OPPONENT);
+            }
         }
 
         // player scores
         if (ballY < 0) {
             Log.d("COLLISION", "death top");
 
-            score(PLAYER);
+            if (isServer) {
+                score(PLAYER);
+            }
         }
 
         // left side collision
@@ -522,7 +526,9 @@ public class GameThread extends Thread {
             ballSpeedX *= -1;
             ballX = 0; // prevents double collision
 
-            btUpdateSync();
+            if (isServer) {
+                btUpdateSync();
+            }
         }
 
         // right side collision
@@ -532,7 +538,9 @@ public class GameThread extends Thread {
             ballSpeedX *= -1;
             ballX = gameWidth - ballSide; // same
 
-            btUpdateSync();
+            if (isServer) {
+                btUpdateSync();
+            }
         }
 
         // player bat collision check
@@ -546,7 +554,9 @@ public class GameThread extends Thread {
                 // prevents double collision
                 ballY = batY - batHeight;
 
-                btUpdateSync();
+                if (isServer) {
+                    btUpdateSync();
+                }
             }
         }
 
@@ -561,7 +571,9 @@ public class GameThread extends Thread {
                 // same
                 ballY = batOppY + batHeight;
 
-                btUpdateSync();
+                if (isServer) {
+                    btUpdateSync();
+                }
             }
         }
     }
