@@ -10,7 +10,6 @@ import android.view.WindowManager;
 
 import java.util.Random;
 
-enum ControlScheme { HALF, FOLLOW }
 enum ScoringScheme { POINT, SPEED }
 
 public class GameThread extends Thread {
@@ -43,7 +42,6 @@ public class GameThread extends Thread {
     private float scaleY;
 
     private boolean isTouchDown = false;
-    private ControlScheme controlScheme;
     private ScoringScheme scoringScheme;
 
     private float batMove;
@@ -129,10 +127,6 @@ public class GameThread extends Thread {
         ballDefaultY = gameHeight / 3;
         scoreX = gameWidth / 2;
         scoreY = gameHeight / 3;
-
-        // HALF     = touch the left side of the screen to go left and vice versa
-        // FOLLOW   = bat follows touch
-        controlScheme = ControlScheme.HALF;
 
         // POINT    = one point per death
         // SPEED    = ball's current speed per death
@@ -490,27 +484,10 @@ public class GameThread extends Thread {
             // +1 right
             int batMoveDirection = 0;
 
-            switch (controlScheme) {
-                case HALF:
-                    if (touchX < Math.floor(screenWidth / 2)) {
-                        batMoveDirection = -1;
-                    } else {
-                        batMoveDirection = 1;
-                    }
-
-                    break;
-                case FOLLOW:
-                    float followTarget = touchX - batWidth / 2;
-                    float follower = batX + batWidth / 2;
-
-                    if (followTarget < follower) {
-                        batMoveDirection = -1;
-                    } else {
-                        batMoveDirection = 1;
-                    }
-
-                    break;
-                default: Log.d("BATMOVE", "batMove() scheme defaults");
+            if (touchX < Math.floor(screenWidth / 2)) {
+                batMoveDirection = -1;
+            } else {
+                batMoveDirection = 1;
             }
 
             batX += batMove * batMoveDirection;

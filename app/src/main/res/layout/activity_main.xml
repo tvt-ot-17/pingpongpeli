@@ -26,6 +26,7 @@
             android:text="Connect" />
     </LinearLayout>
 
+    <!--
     <ListView
         android:id="@+id/list"
         android:layout_width="match_parent"
@@ -54,4 +55,5 @@
             android:layout_weight="0.2"
             android:text="send" />
     </LinearLayout>
+    -->
 </LinearLayout>

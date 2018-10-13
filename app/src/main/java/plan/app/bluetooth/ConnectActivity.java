@@ -12,7 +12,6 @@ import android.os.Handler;
 import android.os.Message;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.AdapterView;
@@ -22,17 +21,12 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.util.ArrayList;
 import java.util.Set;
 
 public class ConnectActivity extends AppCompatActivity {
     private TextView status;
     private Button btnConnect;
-    private ListView listView;
-    private TextView txtMessage;
     private Dialog dialog;
-    private ArrayAdapter<String> chatAdapter;
-    private ArrayList<String> chatMessages;
     private BluetoothAdapter bluetoothAdapter;
 
     public static final int MESSAGE_STATE_CHANGE = 1;
@@ -70,11 +64,6 @@ public class ConnectActivity extends AppCompatActivity {
                 showPrinterPickDialog();
             }
         });
-
-        //set chat adapter
-        chatMessages = new ArrayList<>();
-        chatAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, chatMessages);
-        listView.setAdapter(chatAdapter);
     }
 
     private void startGame() {
@@ -157,8 +146,8 @@ public class ConnectActivity extends AppCompatActivity {
         discoveredDevicesAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1);
 
         //locate listviews and attatch the adapters
-        ListView listView = (ListView) dialog.findViewById(R.id.pairedDeviceList);
-        ListView listView2 = (ListView) dialog.findViewById(R.id.discoveredDeviceList);
+        ListView listView = dialog.findViewById(R.id.pairedDeviceList);
+        ListView listView2 = dialog.findViewById(R.id.discoveredDeviceList);
         listView.setAdapter(pairedDevicesAdapter);
         listView2.setAdapter(discoveredDevicesAdapter);
 
@@ -233,24 +222,6 @@ public class ConnectActivity extends AppCompatActivity {
     private void findViewsByIds() {
         status = findViewById(R.id.status);
         btnConnect = findViewById(R.id.btn_connect);
-        listView = findViewById(R.id.list);
-        txtMessage = findViewById(R.id.txtMessage);
-
-        View btnSend = findViewById(R.id.btn_send);
-        btnSend.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                String msg = txtMessage.getText().toString();
-
-                if (msg.equals("")) {
-                    Toast.makeText(ConnectActivity.this, "Please input some texts", Toast.LENGTH_SHORT).show();
-                } else {
-                    //TODO: here
-                    sendMessage(msg);
-                    txtMessage.setText("");
-                }
-            }
-        });
     }
 
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
