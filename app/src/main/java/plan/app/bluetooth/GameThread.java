@@ -120,7 +120,6 @@ public class GameThread extends Thread {
 
         // internal starting positions
         batX = gameWidth / 2 - batWidth / 2;
-        //batY = gameHeight - batHeight - Math.round(statusbarHeight / scaleY) - 60; // magic margin
         batY = gameHeight - batHeight - 75; // magic margin
         batOppX = gameWidth / 2 - batWidth / 2;
         batOppY = batHeight + 75; // magic margin
@@ -138,7 +137,8 @@ public class GameThread extends Thread {
         DEBUG_show_debug = true;
 
         respawnBall();
-        btUpdateBatPosition();
+        //btUpdateBatPosition();
+        btSendDataPacket();
         this.cv = new CustomView(context, this, activity);
 
         // debug prints
@@ -178,10 +178,6 @@ public class GameThread extends Thread {
     }
 
     // server send functions
-    private void btUpdateBatPosition() {
-        ca.sendMessage("bat:" + batX + ";" + batY + ";" + batOppX + ";" + batOppY);
-    }
-
     private void btUpdateScore() {
         ca.sendMessage("score:" + score + ";" + scoreOpp);
     }
@@ -191,10 +187,31 @@ public class GameThread extends Thread {
         ca.sendMessage("touch:" + isClientTouchDown + ";" + direction);
     }
 
+    private void btSendDataPacket() {
+        // p:bx:by:batx:baty:batoppx:batoppy
+        //
+        // index    contains
+        // 0        p
+        // 1        ball x
+        // 2        ball y
+        // 3        servers bat x
+        // 4        servers bat y (0 assumes no change)
+        // 5        clients bat x
+        // 6        clients bat y (0 assumes no change)
+
+        // packet construction
+        String packet = "p:";
+        packet += ballX     + ":" + ballY       + ":";
+        packet += batX      + ":" + batY        + ":";
+        packet += batOppX   + ":" + batOppY;
+
+        ca.sendMessage(packet);
+    }
+
     // client receive functions
     // ConnectActivity.handler call's this
     public void btReceiveMessage(String msg) {
-        Log.d("BT_RECEIVE", msg);
+        // Log.d("BT_RECEIVE", msg);
         // expected msg: type:variable
 
         String[] parts = msg.split(":");
@@ -203,11 +220,14 @@ public class GameThread extends Thread {
             Log.e("BT_RECEIVE", "bt received too short message");
         } else {
             switch (parts[0]) {
+                case "p":
+                    btReceiveDataPacket(parts);
+                    break;
                 case "b":
-                    btSetBallPosition(parts[1]);
+                    //btSetBallPosition(parts[1]);
                     break;
                 case "bat":
-                    btSetBatPosition(parts[1]);
+                    //btSetBatPosition(parts[1]);
                     break;
                 case "score":
                     btSetScore(parts[1]);
@@ -221,46 +241,28 @@ public class GameThread extends Thread {
         }
     }
 
-    private void btSetBallPosition(String msg) {
-        // expected msg: x;y
-        // no error checking to reduce work load
-        // TODO: optimize speed
+    private void btReceiveDataPacket(String[] data) {
+        if (data.length == 7) {
+            try {
+                float tmp_ballX = Float.parseFloat(data[1]);
+                float tmp_ballY = Float.parseFloat(data[2]);
+                float tmp_batX = Float.parseFloat(data[5]);
+                float tmp_batY = Float.parseFloat(data[6]);
+                float tmp_batOppX = Float.parseFloat(data[3]);
+                float tmp_batOppY = Float.parseFloat(data[4]);
 
-        //Log.d("BT_RECEIVE", msg);
-        String[] parts = msg.split(";");
+                // mirror
+                ballX = gameWidth - tmp_ballX;
+                ballY = gameHeight - tmp_ballY;
+                batOppX = gameWidth - tmp_batOppX - batWidth;
+                batOppY = gameHeight - tmp_batOppY;
+                batX = gameWidth - tmp_batX - batWidth;
+                batY = gameHeight - tmp_batY;
+            } catch (Exception e) {
 
-        try {
-            float tmp_ballX = Float.parseFloat(parts[0]);
-            float tmp_ballY = Float.parseFloat(parts[1]);
-
-            ballX = gameWidth - tmp_ballX;
-            ballY = gameHeight - tmp_ballY;
-        } catch (Exception e) {
-
-        }
-    }
-
-    private void btSetBatPosition(String msg) {
-        // expected msg: batx;baty;oppx;oppy
-        Log.d("BT_RECEIVE" , msg);
-
-        String[] parts = msg.split(";");
-
-        // reversed for client
-        try {
-            float tmp_batX = Float.parseFloat(parts[2]);
-            float tmp_batY = Float.parseFloat(parts[3]);
-            float tmp_batOppX = Float.parseFloat(parts[0]);
-            float tmp_batOppY = Float.parseFloat(parts[1]);
-
-            // mirror
-            batOppX = gameWidth - tmp_batOppX - batWidth;
-            batOppY = gameHeight - tmp_batOppY;
-
-            batX = gameWidth - tmp_batX - batWidth;
-            batY = gameHeight - tmp_batY;
-        } catch (Exception e) {
-
+            }
+        } else {
+            Log.e("BT_DATAPACKET", "wrong packet length: " + data.length);
         }
     }
 
@@ -334,8 +336,8 @@ public class GameThread extends Thread {
         bt++;
 
         if (bt >= targetBtFrameCount) {
-            ca.sendMessage("b:" + ballX + ";" + ballY);
-
+            btSendDataPacket();
+            //btUpdateBallPosition();
             bt = 0;
         }
     }
@@ -474,7 +476,7 @@ public class GameThread extends Thread {
                 batOppX = gameWidth - batWidth;
             }
 
-            btUpdateBatPosition();
+            //btUpdateBatPosition();
         }
 
         // actual moving here
@@ -500,7 +502,7 @@ public class GameThread extends Thread {
                 batX = gameWidth - batWidth;
             }
 
-            btUpdateBatPosition();
+            //btUpdateBatPosition();
         }
     }
 
