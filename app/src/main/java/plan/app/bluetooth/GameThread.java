@@ -175,7 +175,7 @@ public class GameThread extends Thread {
             if (isServer) {
                 ballWiggle();
                 collisionCheck();
-                btSync();
+                //btSync();
                 batMove();
             }
 
@@ -187,13 +187,8 @@ public class GameThread extends Thread {
     // --- BLUETOOTH FUNCTIONS ---
     // ---------------------------
 
-    // server send functions
-    private void btUpdateScore() {
-        ca.sendMessage("score:" + score + ";" + scoreOpp);
-    }
-
     // deprecated
-    private void btSendDataPacket() {
+    private void btUpdateData() {
         // p:bx:by:batx:batoppx
         //
         // index    contains
@@ -214,15 +209,6 @@ public class GameThread extends Thread {
         ca.sendMessage(packet);
     }
 
-    private void btUpdateBatPosition() {
-        ca.sendMessage("bat:" + batX + ";" + batY + ";" + batOppX + ";" + batOppY);
-    }
-
-    // deprecated
-    private void btUpdateBallPosition() {
-        ca.sendMessage("b:" + ballX + ";" + ballY);
-    }
-
     // sync speed and position at every collision
     // client moves the ball
     private void btUpdateSync() {
@@ -235,12 +221,30 @@ public class GameThread extends Thread {
         ca.sendMessage(sync);
     }
 
+    // server send functions
+    private void btUpdateScore() {
+        ca.sendMessage("score:" + score + ";" + scoreOpp);
+    }
+
+    private void btUpdateBatPosition() {
+        ca.sendMessage("bat:" + batX + ";" + batY + ";" + batOppX + ";" + batOppY);
+    }
+
+    // deprecated
+    private void btUpdateBallPosition() {
+        ca.sendMessage("b:" + ballX + ";" + ballY);
+    }
+
     // client send functions
-    private void btUpdateClientTouch(String isClientTouchDown, String direction) {
+    private void btClientUpdateTouch(String isClientTouchDown, String direction) {
         ca.sendMessage("touch:" + isClientTouchDown + ";" + direction);
     }
 
-    // client receive functions
+    private void btClientConfirmSync() {
+        ca.sendMessage("sync:1");
+    }
+
+    // receive functions
     // ConnectActivity.handler calls this
     public void btReceiveMessage(String msg) {
         // Log.d("BT_RECEIVE", msg);
@@ -253,30 +257,32 @@ public class GameThread extends Thread {
         } else {
             switch (parts[0]) {
                 case "p": // deprecated
-                    btReceiveDataPacket(parts);
+                    btClientSetData(parts);
                     break;
                 case "s":
-                    btReceiveSyncPacket(parts);
+                    btClientSetSync(parts);
                     break;
                 case "ball":
-                    btSetBallPosition(parts[1]);
+                    btClientSetBallPosition(parts[1]);
                     break;
                 case "bat":
-                    btSetBatPosition(parts[1]);
+                    btClientSetBatPosition(parts[1]);
                     break;
                 case "score":
-                    btSetScore(parts[1]);
+                    btClientSetScore(parts[1]);
                     break;
-                case "touch":
-                    btSetTouch(parts[1]);
+                case "touch": // server receive
+                    btServerSetTouch(parts[1]);
                     break;
+                case "sync": // server receive
+                    btServerSyncConfirm();
                 default:
                     Log.e("BT_RECEIVE", "parts[0] switch defaults");
             }
         }
     }
 
-    private void btReceiveSyncPacket(String[] data) {
+    private void btClientSetSync(String[] data) {
         if (DEBUG_show_debug) {
             DEBUG_datapacket = "";
 
@@ -296,6 +302,8 @@ public class GameThread extends Thread {
                 ballY = gameHeight - tmp_ballY;
                 ballSpeedX = tmp_bsX * -1;
                 ballSpeedY = tmp_bsY * -1;
+
+                btClientConfirmSync();
             } catch (Exception e) {
 
             }
@@ -305,7 +313,7 @@ public class GameThread extends Thread {
     }
 
     // deprecated
-    private void btReceiveDataPacket(String[] data) {
+    private void btClientSetData(String[] data) {
         if (DEBUG_show_debug) {
             DEBUG_datapacket = "";
 
@@ -335,7 +343,7 @@ public class GameThread extends Thread {
     }
 
     // deprecated
-    private void btSetBallPosition(String msg) {
+    private void btClientSetBallPosition(String msg) {
         // expected msg: x;y
         //Log.d("BT_RECEIVE", msg);
         String[] parts = msg.split(";");
@@ -351,7 +359,7 @@ public class GameThread extends Thread {
         }
     }
 
-    private void btSetBatPosition(String msg) {
+    private void btClientSetBatPosition(String msg) {
         // expected msg: batx;baty;oppx;oppy
         //Log.d("BT_RECEIVE", msg);
 
@@ -375,7 +383,7 @@ public class GameThread extends Thread {
         }
     }
 
-    private void btSetScore(String msg) {
+    private void btClientSetScore(String msg) {
         // expected msg: score;oppscore
         //Log.d("BT_RECEIVE", "score: " + msg);
 
@@ -393,7 +401,7 @@ public class GameThread extends Thread {
     }
 
     // server receive functions
-    private void btSetTouch(String msg) {
+    private void btServerSetTouch(String msg) {
         // expected msg: boolean;direction (true,false;left,right)
 
         Log.d("BT_RECEIVE", "setTouch: " + msg);
@@ -417,6 +425,10 @@ public class GameThread extends Thread {
         } catch (Exception e) {
 
         }
+    }
+
+    private void btServerSyncConfirm() {
+        // TODO: send sync again if no confirm
     }
 
     // ----------------------------------
@@ -470,44 +482,6 @@ public class GameThread extends Thread {
             btUpdateSync();
             bt = 0;
         }
-    }
-
-    private void score(int side) {
-        // 0 = player
-        // 1 = opponent
-
-        switch (scoringScheme) {
-            case POINT:
-                if (side == PLAYER) {
-                    score++;
-                } else if (side == OPPONENT) {
-                    scoreOpp++;
-                }
-
-                break;
-
-            case SPEED:
-                int speedScore = Math.abs(ballSpeedX) - ballSpeedDefault + 1;
-
-                if (side == PLAYER) {
-                    score += speedScore;
-                } else if (side == OPPONENT) {
-                    scoreOpp += speedScore;
-                }
-
-                Log.d("SCORE", "speedScore: " + speedScore);
-                break;
-
-            default: Log.d("SCORE", "scoringScheme defaults");
-        }
-
-        cv.showScore(180);  // show score for 2 seconds (drawCalls / frame rate)
-        respawnBall();
-
-        Log.d("SCORE", "score: " + score);
-        Log.d("SCORE", "scoreOpp: " + scoreOpp);
-
-        btUpdateScore();
     }
 
     private void collisionCheck() {
@@ -629,6 +603,44 @@ public class GameThread extends Thread {
             btUpdateBatPosition();
         }
     }
+    
+    private void score(int side) {
+        // 0 = player
+        // 1 = opponent
+
+        switch (scoringScheme) {
+            case POINT:
+                if (side == PLAYER) {
+                    score++;
+                } else if (side == OPPONENT) {
+                    scoreOpp++;
+                }
+
+                break;
+
+            case SPEED:
+                int speedScore = Math.abs(ballSpeedX) - ballSpeedDefault + 1;
+
+                if (side == PLAYER) {
+                    score += speedScore;
+                } else if (side == OPPONENT) {
+                    scoreOpp += speedScore;
+                }
+
+                Log.d("SCORE", "speedScore: " + speedScore);
+                break;
+
+            default: Log.d("SCORE", "scoringScheme defaults");
+        }
+
+        cv.showScore(180);  // show score for 2 seconds (drawCalls / frame rate)
+        respawnBall();
+
+        Log.d("SCORE", "score: " + score);
+        Log.d("SCORE", "scoreOpp: " + scoreOpp);
+
+        btUpdateScore();
+    }
 
     private void increaseBallSpeed() {
         if (Math.abs(ballSpeedX) < ballSpeedMax) {
@@ -682,7 +694,7 @@ public class GameThread extends Thread {
                         }
 
                         isClientTouchDown = true;
-                        btUpdateClientTouch("true", direction);
+                        btClientUpdateTouch("true", direction);
                     }
                 }
 
@@ -694,7 +706,7 @@ public class GameThread extends Thread {
                 isTouchDown = false;
                 if (!isServer) {
                     if (isClientTouchDown) {
-                        btUpdateClientTouch("false", "null");
+                        btClientUpdateTouch("false", "null");
                         isClientTouchDown = false;
                     }
                 }
