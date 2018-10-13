@@ -17,6 +17,7 @@ public class CustomView extends View {
     private Paint paintBatOpponent;
     private Paint paintBall;
     private Paint paintText;
+    private Paint paintDebug;
 
     private GameThread game;
     private Activity activity;
@@ -51,13 +52,20 @@ public class CustomView extends View {
         // and paints for painting
         paintBat = new Paint();
         paintBat.setColor(Color.WHITE);
+
         paintBatOpponent = new Paint();
         paintBatOpponent.setColor(Color.GRAY);
+
         paintBall = new Paint();
         paintBall.setColor(Color.GREEN);
+
         paintText = new Paint();
         paintText.setColor(Color.WHITE);
         paintText.setTextSize(150);
+
+        paintDebug = new Paint();
+        paintDebug.setColor(Color.WHITE);
+        paintDebug.setTextSize(50);
     }
 
     @Override
@@ -79,6 +87,13 @@ public class CustomView extends View {
             scoreTextCounter--; // draw call counter
             if (scoreTextCounter < 0) {
                 isScoreTextEnabled = false;
+            }
+        }
+
+        // debug message draw
+        if (game.getDebug_show()) {
+            for (int i = 1; i < 4; i++) {
+                canvas.drawText(game.getDebug_msg(i), 25, i * 50 + 100, paintDebug);
             }
         }
     }

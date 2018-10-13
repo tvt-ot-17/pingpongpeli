@@ -20,9 +20,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".ConnectActivity"></activity>
-        <activity android:name=".TransferActivity"></activity>
-
+        <activity android:name=".ConnectActivity" />
+        <activity android:name=".TransferActivity" />
+        <activity android:name=".GameActivity"></activity>
     </application>
 
 </manifest>
