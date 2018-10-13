@@ -19,14 +19,15 @@ public class GameThread extends Thread {
     // counters
     private int draw = 0;
     private int wiggle = 0;
-    private int bt = 0;
+    private int sync = 0;
+    private boolean btSyncCounter = false;
 
     private Random random = new Random();
 
     private int targetFrameRate;
     private int targetMillis;
     private int targetDrawFrameCount;
-    private int targetBtSyncFrameCount;
+    private int btSyncWaitCount;
 
     private int ballSpeedX;
     private int ballSpeedY;
@@ -102,7 +103,7 @@ public class GameThread extends Thread {
         targetFrameRate = 60;          // internal update
         targetMillis = 1000 / targetFrameRate;
         targetDrawFrameCount = 1;       // actual drawing fps is target divided by this (180 / 2 = 90 fps)
-        targetBtSyncFrameCount = 2;     //
+        btSyncWaitCount = 7;            // resend bt sync after this many frames have passed
         gameHeight = 1920;              // internal resolution
         gameWidth = 1080;               //
         scaleX = screenWidth / gameWidth;
@@ -175,7 +176,7 @@ public class GameThread extends Thread {
             if (isServer) {
                 ballWiggle();
                 collisionCheck();
-                //btSync();
+                btSync();
                 batMove();
             }
 
@@ -183,9 +184,10 @@ public class GameThread extends Thread {
         }
     }
 
-    // ---------------------------
-    // --- BLUETOOTH FUNCTIONS ---
-    // ---------------------------
+    // ----------------------------------
+    // ------ BLUETOOTH FUNCTIONS -------
+    // ----------------------------------
+    //region BLUETOOTH
 
     // deprecated
     private void btUpdateData() {
@@ -219,6 +221,10 @@ public class GameThread extends Thread {
         sync += ballSpeedY + ":";
 
         ca.sendMessage(sync);
+
+        // server begins to wait for sync confirmation
+        this.sync = 0;
+        btSyncCounter = true;
     }
 
     // server send functions
@@ -241,6 +247,7 @@ public class GameThread extends Thread {
     }
 
     private void btClientConfirmSync() {
+        Log.d("BT_CLIENT_SEND", "send sync confirm");
         ca.sendMessage("sync:1");
     }
 
@@ -276,8 +283,9 @@ public class GameThread extends Thread {
                     break;
                 case "sync": // server receive
                     btServerSyncConfirm();
+                    break;
                 default:
-                    Log.e("BT_RECEIVE", "parts[0] switch defaults");
+                    Log.e("BT_RECEIVE", "parts[0] switch defaults: " + parts[0]);
             }
         }
     }
@@ -428,9 +436,14 @@ public class GameThread extends Thread {
     }
 
     private void btServerSyncConfirm() {
-        // TODO: send sync again if no confirm
+        Log.d("BT_RECEIVE", "sync confirmed");
+
+        // reset sync counter
+        btSyncCounter = false;
+        sync = 0;
     }
 
+    //endregion
     // ----------------------------------
     // --- END OF BLUETOOTH FUNCTIONS ---
     // ----------------------------------
@@ -476,11 +489,14 @@ public class GameThread extends Thread {
     }
 
     private void btSync() {
-        bt++;
+        if (btSyncCounter) {
+            sync++;
 
-        if (bt >= targetBtSyncFrameCount) {
-            btUpdateSync();
-            bt = 0;
+            if (sync > btSyncWaitCount) {
+                sync = 0;
+                btUpdateSync();
+                Log.e("BT_SYNC", "sync counter reached target, sending new sync");
+            }
         }
     }
 
@@ -603,7 +619,7 @@ public class GameThread extends Thread {
             btUpdateBatPosition();
         }
     }
-    
+
     private void score(int side) {
         // 0 = player
         // 1 = opponent

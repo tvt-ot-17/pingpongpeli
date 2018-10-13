@@ -303,7 +303,10 @@ public class ConnectActivity extends AppCompatActivity {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        game.touchEvent(event);
+        if (game != null) {
+            game.touchEvent(event);
+        }
+
         return super.onTouchEvent(event);
     }
 }
