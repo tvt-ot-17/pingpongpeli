@@ -76,7 +76,7 @@ public class GameThread extends Thread {
     private final boolean isServer;
 
     // client specific variables
-    private boolean isClientTouchDown;
+    private boolean isClientTouchDown = false;
     private int batClientMoveDirection;
 
     GameThread(Context context, Activity activity, ConnectActivity ca, boolean isServer) {
@@ -96,18 +96,18 @@ public class GameThread extends Thread {
         int statusbarHeight = getStatusBarHeight(context);
 
         // frame rate is only a target, not a guarantee!
-        targetFrameRate = 180;          // internal update
+        targetFrameRate = 120;          // internal update
         targetMillis = 1000 / targetFrameRate;
         targetDrawFrameCount = 2;       // actual drawing fps is target divided by this (180 / 2 = 90 fps)
         targetBtFrameCount = 2;         // bt update interval
-        gameHeight = 1280;              // internal resolution
-        gameWidth = 720;                //
+        gameHeight = 1920;              // internal resolution
+        gameWidth = 1080;               //
         scaleX = screenWidth / gameWidth;
-        scaleY = screenHeight / gameHeight;
+        scaleY = (screenHeight - statusbarHeight) / gameHeight;
 
         // starting parameters
         batMove = 5;                    // bat moving speed
-        batWidth = 150;                 //
+        batWidth = 200;                 //
         batHeight = 15;                 //
         ballSide = 15;                  // ball width and height
         ballSpeedDefault = 1;           // ball speed at spawn
@@ -120,9 +120,10 @@ public class GameThread extends Thread {
 
         // internal starting positions
         batX = gameWidth / 2 - batWidth / 2;
-        batY = gameHeight - batHeight - Math.round(statusbarHeight / scaleY) - 60; // magic margin
+        //batY = gameHeight - batHeight - Math.round(statusbarHeight / scaleY) - 60; // magic margin
+        batY = gameHeight - batHeight - 75; // magic margin
         batOppX = gameWidth / 2 - batWidth / 2;
-        batOppY = batHeight + 60; // magic margin
+        batOppY = batHeight + 75; // magic margin
         ballDefaultX = gameWidth / 2;
         ballDefaultY = gameHeight / 3;
         scoreX = gameWidth / 2;
@@ -137,6 +138,7 @@ public class GameThread extends Thread {
         DEBUG_show_debug = true;
 
         respawnBall();
+        btUpdateBatPosition();
         this.cv = new CustomView(context, this, activity);
 
         // debug prints
@@ -169,7 +171,6 @@ public class GameThread extends Thread {
                 ballMove();
                 batMove();
                 collisionCheck();
-                btUpdateBallPosition();
             }
 
             draw();
@@ -177,16 +178,6 @@ public class GameThread extends Thread {
     }
 
     // server send functions
-    private void btUpdateBallPosition() {
-        bt++;
-
-        if (bt >= targetBtFrameCount) {
-            ca.sendMessage("ball:" + ballX + ";" + ballY);
-
-            bt = 0;
-        }
-    }
-
     private void btUpdateBatPosition() {
         ca.sendMessage("bat:" + batX + ";" + batY + ";" + batOppX + ";" + batOppY);
     }
@@ -212,7 +203,7 @@ public class GameThread extends Thread {
             Log.e("BT_RECEIVE", "bt received too short message");
         } else {
             switch (parts[0]) {
-                case "ball":
+                case "b":
                     btSetBallPosition(parts[1]);
                     break;
                 case "bat":
@@ -339,6 +330,14 @@ public class GameThread extends Thread {
     private void ballMove() {
         ballX += ballSpeedX;
         ballY += ballSpeedY;
+
+        bt++;
+
+        if (bt >= targetBtFrameCount) {
+            ca.sendMessage("b:" + ballX + ";" + ballY);
+
+            bt = 0;
+        }
     }
 
     private void draw() {
@@ -546,15 +545,18 @@ public class GameThread extends Thread {
                 if (isServer) {
                     isTouchDown = true;
                 } else {
-                    String direction = "null";
+                    if (!isClientTouchDown) {
+                        String direction = "null";
 
-                    if (touchX < Math.floor(screenWidth / 2)) {
-                        direction = "left";
-                    } else {
-                        direction = "right";
+                        if (touchX < Math.floor(screenWidth / 2)) {
+                            direction = "left";
+                        } else {
+                            direction = "right";
+                        }
+
+                        isClientTouchDown = true;
+                        btUpdateClientTouch("true", direction);
                     }
-
-                    btUpdateClientTouch("true", direction);
                 }
 
                 break;
@@ -565,7 +567,10 @@ public class GameThread extends Thread {
                 if (isServer) {
                     isTouchDown = false;
                 } else {
-                    btUpdateClientTouch("false", "null");
+                    if (isClientTouchDown) {
+                        btUpdateClientTouch("false", "null");
+                        isClientTouchDown = false;
+                    }
                 }
 
                 break;
@@ -647,6 +652,7 @@ public class GameThread extends Thread {
         if (i == 1) return isServer ? "isServer TRUE" : "isServer FALSE";
         if (i == 2) return "ballX: " + ballX + " " + ballY;
         if (i == 3) return "batXY: " + batX + " " + batY + " batOppXY: " + batOppX + " " + batOppY;
+        if (i == 4) return isClientTouchDown ? "isClientTD TRUE" : "isClientTD FALSE";
         return "debug returns nothing";
     }
 }

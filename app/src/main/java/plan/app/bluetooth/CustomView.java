@@ -92,8 +92,8 @@ public class CustomView extends View {
 
         // debug message draw
         if (game.getDebug_show()) {
-            for (int i = 1; i < 4; i++) {
-                canvas.drawText(game.getDebug_msg(i), 25, i * 50 + 100, paintDebug);
+            for (int i = 1; i <= 4; i++) {
+                canvas.drawText(game.getDebug_msg(i), 25, i * 50, paintDebug);
             }
         }
     }

@@ -1,5 +1,6 @@
 package plan.app.bluetooth;
 
+import android.app.ActionBar;
 import android.app.Activity;
 import android.app.Dialog;
 import android.bluetooth.BluetoothAdapter;
@@ -14,6 +15,8 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -68,6 +71,9 @@ public class ConnectActivity extends AppCompatActivity {
 
     private void startGame() {
         getSupportActionBar().hide();
+
+        // wont stay hidden
+        //getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_HIDE_NAVIGATION);
 
         game = new GameThread(getApplicationContext(), ConnectActivity.this, this, isServer);
 
