@@ -16,15 +16,17 @@ public class GameThread extends Thread {
     public CustomView cv;
     private ConnectActivity ca;
 
+    // counters
     private int draw = 0;
     private int wiggle = 0;
     private int bt = 0;
+
     private Random random = new Random();
 
     private int targetFrameRate;
     private int targetMillis;
     private int targetDrawFrameCount;
-    private int targetBtFrameCount;
+    private int targetBtSyncFrameCount;
 
     private int ballSpeedX;
     private int ballSpeedY;
@@ -97,21 +99,21 @@ public class GameThread extends Thread {
         int statusbarHeight = getStatusBarHeight(context);
 
         // frame rate is only a target, not a guarantee!
-        targetFrameRate = 120;          // internal update
+        targetFrameRate = 60;          // internal update
         targetMillis = 1000 / targetFrameRate;
-        targetDrawFrameCount = 2;       // actual drawing fps is target divided by this (180 / 2 = 90 fps)
-        targetBtFrameCount = 3;         // bt update interval
+        targetDrawFrameCount = 1;       // actual drawing fps is target divided by this (180 / 2 = 90 fps)
+        targetBtSyncFrameCount = 2;     //
         gameHeight = 1920;              // internal resolution
         gameWidth = 1080;               //
         scaleX = screenWidth / gameWidth;
         scaleY = (screenHeight - statusbarHeight) / gameHeight;
 
         // starting parameters
-        batMove = 5;                    // bat moving speed
+        batMove = 10;                    // bat moving speed
         batWidth = 200;                 //
         batHeight = 15;                 //
         ballSide = 15;                  // ball width and height
-        ballSpeedDefault = 1;           // ball speed at spawn
+        ballSpeedDefault = 3;           // ball speed at spawn
         ballSpeedIncrease = 1;          // for each bat hit
         ballSpeedMax = 25;              // max speed. increase frame rate _when_ problems occur.
         score = 0;                      //
@@ -138,8 +140,8 @@ public class GameThread extends Thread {
         DEBUG_show_debug = false;
 
         respawnBall();
+        btUpdateSync();
         btUpdateBatPosition();
-        btUpdateBallPosition();
 
         this.cv = new CustomView(context, this, activity);
 
@@ -168,11 +170,13 @@ public class GameThread extends Thread {
                 e.printStackTrace();
             }
 
+            ballMove();
+
             if (isServer) {
                 ballWiggle();
-                ballMove();
-                batMove();
                 collisionCheck();
+                btSync();
+                batMove();
             }
 
             draw();
@@ -188,6 +192,7 @@ public class GameThread extends Thread {
         ca.sendMessage("score:" + score + ";" + scoreOpp);
     }
 
+    // deprecated
     private void btSendDataPacket() {
         // p:bx:by:batx:batoppx
         //
@@ -213,8 +218,21 @@ public class GameThread extends Thread {
         ca.sendMessage("bat:" + batX + ";" + batY + ";" + batOppX + ";" + batOppY);
     }
 
+    // deprecated
     private void btUpdateBallPosition() {
         ca.sendMessage("b:" + ballX + ";" + ballY);
+    }
+
+    // sync speed and position at every collision
+    // client moves the ball
+    private void btUpdateSync() {
+        String sync = "s:";
+        sync += ballX + ":";
+        sync += ballY + ":";
+        sync += ballSpeedX + ":";
+        sync += ballSpeedY + ":";
+
+        ca.sendMessage(sync);
     }
 
     // client send functions
@@ -223,7 +241,7 @@ public class GameThread extends Thread {
     }
 
     // client receive functions
-    // ConnectActivity.handler call's this
+    // ConnectActivity.handler calls this
     public void btReceiveMessage(String msg) {
         // Log.d("BT_RECEIVE", msg);
         // expected msg: type:variable
@@ -234,8 +252,11 @@ public class GameThread extends Thread {
             Log.e("BT_RECEIVE", "bt received too short message");
         } else {
             switch (parts[0]) {
-                case "p":
+                case "p": // deprecated
                     btReceiveDataPacket(parts);
+                    break;
+                case "s":
+                    btReceiveSyncPacket(parts);
                     break;
                 case "ball":
                     btSetBallPosition(parts[1]);
@@ -255,6 +276,35 @@ public class GameThread extends Thread {
         }
     }
 
+    private void btReceiveSyncPacket(String[] data) {
+        if (DEBUG_show_debug) {
+            DEBUG_datapacket = "";
+
+            for (String s : data) {
+                DEBUG_datapacket += s + " ";
+            }
+        }
+
+        if (data.length == 5) {
+            try {
+                float tmp_ballX = Float.parseFloat(data[1]);
+                float tmp_ballY = Float.parseFloat(data[2]);
+                int tmp_bsX = Integer.parseInt(data[3]);
+                int tmp_bsY = Integer.parseInt(data[4]);
+
+                ballX = gameWidth - tmp_ballX;
+                ballY = gameHeight - tmp_ballY;
+                ballSpeedX = tmp_bsX * -1;
+                ballSpeedY = tmp_bsY * -1;
+            } catch (Exception e) {
+
+            }
+        } else {
+            Log.e("BT_SYNCPACKET", "wrong packet length: " + data.length);
+        }
+    }
+
+    // deprecated
     private void btReceiveDataPacket(String[] data) {
         if (DEBUG_show_debug) {
             DEBUG_datapacket = "";
@@ -284,6 +334,7 @@ public class GameThread extends Thread {
         }
     }
 
+    // deprecated
     private void btSetBallPosition(String msg) {
         // expected msg: x;y
         //Log.d("BT_RECEIVE", msg);
@@ -388,19 +439,13 @@ public class GameThread extends Thread {
             Log.d("WIGGLE", "wiggled ball speed y: " + n);
 
             wiggle = 0;
+            btUpdateSync();
         }
     }
 
     private void ballMove() {
         ballX += ballSpeedX;
         ballY += ballSpeedY;
-
-        bt++;
-
-        if (bt >= targetBtFrameCount) {
-            btSendDataPacket();
-            bt = 0;
-        }
     }
 
     private void draw() {
@@ -415,6 +460,15 @@ public class GameThread extends Thread {
 
             // set draw counter to zero
             draw = 0;
+        }
+    }
+
+    private void btSync() {
+        bt++;
+
+        if (bt >= targetBtSyncFrameCount) {
+            btUpdateSync();
+            bt = 0;
         }
     }
 
@@ -477,6 +531,8 @@ public class GameThread extends Thread {
 
             ballSpeedX *= -1;
             ballX = 0; // prevents double collision
+
+            btUpdateSync();
         }
 
         // right side collision
@@ -485,6 +541,8 @@ public class GameThread extends Thread {
 
             ballSpeedX *= -1;
             ballX = gameWidth - ballSide; // same
+
+            btUpdateSync();
         }
 
         // player bat collision check
@@ -497,6 +555,8 @@ public class GameThread extends Thread {
 
                 // prevents double collision
                 ballY = batY - batHeight;
+
+                btUpdateSync();
             }
         }
 
@@ -510,6 +570,8 @@ public class GameThread extends Thread {
 
                 // same
                 ballY = batOppY + batHeight;
+
+                btUpdateSync();
             }
         }
     }
@@ -538,6 +600,7 @@ public class GameThread extends Thread {
             }
         }
 
+
         // actual moving here
         if (isTouchDown) {
             // -1 left
@@ -560,6 +623,10 @@ public class GameThread extends Thread {
             if (batX > gameWidth - batWidth) {
                 batX = gameWidth - batWidth;
             }
+        }
+
+        if (isServer || isClientTouchDown) {
+            btUpdateBatPosition();
         }
     }
 
@@ -590,6 +657,8 @@ public class GameThread extends Thread {
         ballSpeedY = ballSpeedDefault;
         ballSpeedX = ballSpeedDefault;
 
+        btUpdateSync();
+
         Log.d("RESPAWN","ball");
     }
 
@@ -601,9 +670,8 @@ public class GameThread extends Thread {
             case MotionEvent.ACTION_DOWN:
                 Log.d("TOUCH_EVENT" , "touch down");
 
-                if (isServer) {
-                    isTouchDown = true;
-                } else {
+                isTouchDown = true;
+                if (!isServer) {
                     if (!isClientTouchDown) {
                         String direction = "null";
 
@@ -623,9 +691,8 @@ public class GameThread extends Thread {
             case MotionEvent.ACTION_UP:
                 Log.d("TOUCH_EVENT" , "touch up");
 
-                if (isServer) {
-                    isTouchDown = false;
-                } else {
+                isTouchDown = false;
+                if (!isServer) {
                     if (isClientTouchDown) {
                         btUpdateClientTouch("false", "null");
                         isClientTouchDown = false;
