@@ -69,6 +69,7 @@ public class GameThread extends Thread {
     private boolean DEBUG_automove_player;
     private boolean DEBUG_automove_opponent;
     private boolean DEBUG_show_debug;
+    private String DEBUG_datapacket = "";
 
     private final int PLAYER = 0;   // TODO: do this type safely
     private final int OPPONENT = 1; // TODO: and this
@@ -99,7 +100,7 @@ public class GameThread extends Thread {
         targetFrameRate = 120;          // internal update
         targetMillis = 1000 / targetFrameRate;
         targetDrawFrameCount = 2;       // actual drawing fps is target divided by this (180 / 2 = 90 fps)
-        targetBtFrameCount = 2;         // bt update interval
+        targetBtFrameCount = 3;         // bt update interval
         gameHeight = 1920;              // internal resolution
         gameWidth = 1080;               //
         scaleX = screenWidth / gameWidth;
@@ -120,9 +121,9 @@ public class GameThread extends Thread {
 
         // internal starting positions
         batX = gameWidth / 2 - batWidth / 2;
-        batY = gameHeight - batHeight - 75; // magic margin
+        batY = gameHeight - batHeight - 75;     // magic margin
         batOppX = gameWidth / 2 - batWidth / 2;
-        batOppY = batHeight + 75; // magic margin
+        batOppY = batHeight + 75;               // magic margin
         ballDefaultX = gameWidth / 2;
         ballDefaultY = gameHeight / 3;
         scoreX = gameWidth / 2;
@@ -134,11 +135,12 @@ public class GameThread extends Thread {
 
         DEBUG_automove_player = false;
         DEBUG_automove_opponent = false;
-        DEBUG_show_debug = true;
+        DEBUG_show_debug = false;
 
         respawnBall();
-        //btUpdateBatPosition();
-        btSendDataPacket();
+        btUpdateBatPosition();
+        btUpdateBallPosition();
+
         this.cv = new CustomView(context, this, activity);
 
         // debug prints
@@ -177,35 +179,47 @@ public class GameThread extends Thread {
         }
     }
 
+    // ---------------------------
+    // --- BLUETOOTH FUNCTIONS ---
+    // ---------------------------
+
     // server send functions
     private void btUpdateScore() {
         ca.sendMessage("score:" + score + ";" + scoreOpp);
     }
 
-    // client send functions
-    private void btUpdateClientTouch(String isClientTouchDown, String direction) {
-        ca.sendMessage("touch:" + isClientTouchDown + ";" + direction);
-    }
-
     private void btSendDataPacket() {
-        // p:bx:by:batx:baty:batoppx:batoppy
+        // p:bx:by:batx:batoppx
         //
         // index    contains
         // 0        p
         // 1        ball x
         // 2        ball y
         // 3        servers bat x
-        // 4        servers bat y (0 assumes no change)
-        // 5        clients bat x
-        // 6        clients bat y (0 assumes no change)
+        // 4        clients bat x
 
         // packet construction
-        String packet = "p:";
-        packet += ballX     + ":" + ballY       + ":";
-        packet += batX      + ":" + batY        + ":";
-        packet += batOppX   + ":" + batOppY;
+        // cast to int for a smaller packet, the decimals do not make a huge difference
+        String packet           = "p:";
+        packet += (int) ballX   + ":";
+        packet += (int) ballY   + ":";
+        packet += (int) batX    + ":";
+        packet += (int) batOppX + ":";
 
         ca.sendMessage(packet);
+    }
+
+    private void btUpdateBatPosition() {
+        ca.sendMessage("bat:" + batX + ";" + batY + ";" + batOppX + ";" + batOppY);
+    }
+
+    private void btUpdateBallPosition() {
+        ca.sendMessage("b:" + ballX + ";" + ballY);
+    }
+
+    // client send functions
+    private void btUpdateClientTouch(String isClientTouchDown, String direction) {
+        ca.sendMessage("touch:" + isClientTouchDown + ";" + direction);
     }
 
     // client receive functions
@@ -223,11 +237,11 @@ public class GameThread extends Thread {
                 case "p":
                     btReceiveDataPacket(parts);
                     break;
-                case "b":
-                    //btSetBallPosition(parts[1]);
+                case "ball":
+                    btSetBallPosition(parts[1]);
                     break;
                 case "bat":
-                    //btSetBatPosition(parts[1]);
+                    btSetBatPosition(parts[1]);
                     break;
                 case "score":
                     btSetScore(parts[1]);
@@ -242,22 +256,26 @@ public class GameThread extends Thread {
     }
 
     private void btReceiveDataPacket(String[] data) {
-        if (data.length == 7) {
+        if (DEBUG_show_debug) {
+            DEBUG_datapacket = "";
+
+            for (String s : data) {
+                DEBUG_datapacket += s + " ";
+            }
+        }
+
+        if (data.length == 5) {
             try {
                 float tmp_ballX = Float.parseFloat(data[1]);
                 float tmp_ballY = Float.parseFloat(data[2]);
-                float tmp_batX = Float.parseFloat(data[5]);
-                float tmp_batY = Float.parseFloat(data[6]);
+                float tmp_batX = Float.parseFloat(data[4]);
                 float tmp_batOppX = Float.parseFloat(data[3]);
-                float tmp_batOppY = Float.parseFloat(data[4]);
 
                 // mirror
                 ballX = gameWidth - tmp_ballX;
                 ballY = gameHeight - tmp_ballY;
                 batOppX = gameWidth - tmp_batOppX - batWidth;
-                batOppY = gameHeight - tmp_batOppY;
                 batX = gameWidth - tmp_batX - batWidth;
-                batY = gameHeight - tmp_batY;
             } catch (Exception e) {
 
             }
@@ -266,13 +284,53 @@ public class GameThread extends Thread {
         }
     }
 
-    private void btSetScore(String msg) {
-        // expected msg: score;oppscore
-
-        Log.d("BT_RECEIVE", "score: " + msg);
+    private void btSetBallPosition(String msg) {
+        // expected msg: x;y
+        //Log.d("BT_RECEIVE", msg);
         String[] parts = msg.split(";");
 
-        // reversed to reflect from clients point of view
+        try {
+            float tmp_ballX = Float.parseFloat(parts[0]);
+            float tmp_ballY = Float.parseFloat(parts[1]);
+
+            ballX = gameWidth - tmp_ballX;
+            ballY = gameHeight - tmp_ballY;
+        } catch (Exception e) {
+
+        }
+    }
+
+    private void btSetBatPosition(String msg) {
+        // expected msg: batx;baty;oppx;oppy
+        //Log.d("BT_RECEIVE", msg);
+
+        String[] parts = msg.split(";");
+
+        // reversed
+        try {
+            float tmp_batX = Float.parseFloat(parts[2]);
+            float tmp_batY = Float.parseFloat(parts[3]);
+            float tmp_batOppX = Float.parseFloat(parts[0]);
+            float tmp_batOppY = Float.parseFloat(parts[1]);
+
+            // reversed
+            batOppX = gameWidth - tmp_batOppX - batWidth;
+            batOppY = gameHeight - tmp_batOppY;
+
+            batX = gameWidth - tmp_batX - batWidth;
+            batY = gameHeight - tmp_batY;
+        } catch (Exception e) {
+
+        }
+    }
+
+    private void btSetScore(String msg) {
+        // expected msg: score;oppscore
+        //Log.d("BT_RECEIVE", "score: " + msg);
+
+        String[] parts = msg.split(";");
+
+        // reversed
         try {
             scoreOpp = Integer.parseInt(parts[0]);
             score = Integer.parseInt(parts[1]);
@@ -310,6 +368,10 @@ public class GameThread extends Thread {
         }
     }
 
+    // ----------------------------------
+    // --- END OF BLUETOOTH FUNCTIONS ---
+    // ----------------------------------
+
     private void ballWiggle() {
         // TODO: this is shit, do it again.
         wiggle++;
@@ -337,7 +399,6 @@ public class GameThread extends Thread {
 
         if (bt >= targetBtFrameCount) {
             btSendDataPacket();
-            //btUpdateBallPosition();
             bt = 0;
         }
     }
@@ -475,8 +536,6 @@ public class GameThread extends Thread {
             if (batOppX > gameWidth - batWidth) {
                 batOppX = gameWidth - batWidth;
             }
-
-            //btUpdateBatPosition();
         }
 
         // actual moving here
@@ -501,8 +560,6 @@ public class GameThread extends Thread {
             if (batX > gameWidth - batWidth) {
                 batX = gameWidth - batWidth;
             }
-
-            //btUpdateBatPosition();
         }
     }
 
@@ -644,7 +701,7 @@ public class GameThread extends Thread {
         return scoreOpp;
     }
 
-    // DEBUG
+    // FOR DEBUGGING PURPOSES
     public boolean getDebug_show() {
         return DEBUG_show_debug;
     }
@@ -655,6 +712,7 @@ public class GameThread extends Thread {
         if (i == 2) return "ballX: " + ballX + " " + ballY;
         if (i == 3) return "batXY: " + batX + " " + batY + " batOppXY: " + batOppX + " " + batOppY;
         if (i == 4) return isClientTouchDown ? "isClientTD TRUE" : "isClientTD FALSE";
+        if (i == 5) return DEBUG_datapacket;
         return "debug returns nothing";
     }
 }
