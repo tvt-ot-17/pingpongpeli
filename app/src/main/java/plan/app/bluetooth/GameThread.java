@@ -132,9 +132,9 @@ public class GameThread extends Thread {
         batWidth = 200;                 //
         batHeight = 15;                 //
         ballSide = 15;                  // ball width and height
-        ballSpeedDefault = 2;           // ball speed at spawn
+        ballSpeedDefault = 1;           // ball speed at spawn
         ballSpeedIncrease = 1;          // for each bat hit
-        ballSpeedMax = 25;              // max speed. increase frame rate _when_ problems occur.
+        ballSpeedMax = 10;              // max speed. increase frame rate _when_ problems occur.
         score = 0;                      //
         scoreOpp = 0;                   //
         ballWiggleInterval = 720;       // wiggle interval uses thread frame rate
@@ -152,7 +152,7 @@ public class GameThread extends Thread {
 
         // client qol settings
         ballDiffSmooth = 1;
-        ballDiffThreshold = 100;
+        ballDiffThreshold = 50;
         batDiffSmooth = 20;
         batDiffThreshold = 300;
 
@@ -254,7 +254,7 @@ public class GameThread extends Thread {
 
         String[] parts = msg.split(":");
 
-        if (parts.length < 1) {
+        if (parts.length < 2) {
             Log.e("BT_RECEIVE", "bt received too short message");
         } else {
             switch (parts[0]) {
@@ -484,13 +484,15 @@ public class GameThread extends Thread {
 
             // bat position sync smoothing
             if (Math.abs(batDiffBufferX) < batDiffThreshold) {
-                if (batDiffBufferX > 0) {
-                    if (batDiffBufferX > batDiffSmooth) {
+                if (batDiffBufferX > 1) {
+                    if (batDiffBufferX >= batDiffSmooth) {
                         batDiffBufferX -= batDiffSmooth;
                         batX += batDiffSmooth;
                     }
-                } else {
-                    if (batDiffBufferX < batDiffSmooth) {
+                }
+
+                if (batDiffBufferX < -1) {
+                    if (batDiffBufferX <= batDiffSmooth) {
                         batDiffBufferX += batDiffSmooth;
                         batX -= batDiffSmooth;
                     }
@@ -514,6 +516,7 @@ public class GameThread extends Thread {
                 score(OPPONENT);
             }
 
+            respawnBall();
             return;
         }
 
@@ -525,6 +528,7 @@ public class GameThread extends Thread {
                 score(PLAYER);
             }
 
+            respawnBall();
             return;
         }
 
@@ -678,7 +682,6 @@ public class GameThread extends Thread {
         }
 
         cv.showScore(180);  // show score for 2 seconds (drawCalls / frame rate)
-        respawnBall();
 
         Log.d("SCORE", "score: " + score);
         Log.d("SCORE", "scoreOpp: " + scoreOpp);
@@ -708,10 +711,17 @@ public class GameThread extends Thread {
     }
 
     private void respawnBall() {
-        ballX = ballDefaultX;
-        ballY = ballDefaultY;
-        ballSpeedY = ballSpeedDefault;
-        ballSpeedX = ballSpeedDefault;
+        if (isServer) {
+            ballSpeedY = ballSpeedDefault;
+            ballSpeedX = ballSpeedDefault;
+            ballX = ballDefaultX;
+            ballY = ballDefaultY;
+        } else {
+            ballX = gameWidth - ballDefaultX;
+            ballY = gameHeight - ballDefaultY;
+            ballSpeedY = -ballSpeedDefault;
+            ballSpeedX = -ballSpeedDefault;
+        }
 
         ballDiffBufferX = 0;
         ballDiffBufferY = 0;
