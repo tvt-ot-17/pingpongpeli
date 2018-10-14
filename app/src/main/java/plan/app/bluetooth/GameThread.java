@@ -50,14 +50,18 @@ public class GameThread extends Thread {
     private float batMove;
     private float batX;
     private float batY;
+    private float batDiffBufferX;
     private float batOppX;
     private float batOppY;
+    private float batDiffSmooth;
+    private float batDiffThreshold;
+
     private float ballX;
     private float ballY;
     private float ballDiffBufferX;
     private float ballDiffBufferY;
-    private float ballDiffSmooth = 1;
-    private float ballDiffThreshold = 100;
+    private float ballDiffSmooth;
+    private float ballDiffThreshold;
 
     private float batWidth;
     private float batHeight;
@@ -76,8 +80,10 @@ public class GameThread extends Thread {
     private boolean DEBUG_automove_player;
     private boolean DEBUG_automove_opponent;
     private boolean DEBUG_show_debug;
-    private String DEBUG_sync_diff = "";
-    private String DEBUG_sync_buffer = "";
+    private String DEBUG_sync_ball_buffer = "";
+    private String DEBUG_sync_ball_diff = "";
+    private String DEBUG_sync_bat_buffer = "";
+    private String DEBUG_sync_bat_diff = "";
 
     private final int PLAYER = 0;   // TODO: do this type safely
     private final int OPPONENT = 1; // TODO: and this
@@ -137,6 +143,12 @@ public class GameThread extends Thread {
         scoreX = gameWidth / 2;
         scoreY = gameHeight / 3;
 
+        // client qol settings
+        ballDiffSmooth = 1;
+        ballDiffThreshold = 100;
+        batDiffSmooth = 20;
+        batDiffThreshold = 300;
+
         // POINT    = one point per death
         // SPEED    = speed equals points
         scoringScheme = ScoringScheme.SPEED;
@@ -190,27 +202,7 @@ public class GameThread extends Thread {
 
     //region Bluetooth
 
-    // deprecated
-    private void btUpdateData() {
-        // p:bx:by:batx:batoppx
-        //
-        // index    contains
-        // 0        p
-        // 1        ball x
-        // 2        ball y
-        // 3        servers bat x
-        // 4        clients bat x
-
-        // packet construction
-        // cast to int for a smaller packet, the decimals do not make a huge difference
-        String packet           = "p:";
-        packet += (int) ballX   + ":";
-        packet += (int) ballY   + ":";
-        packet += (int) batX    + ":";
-        packet += (int) batOppX + ":";
-
-        ca.sendMessage(packet);
-    }
+    // server send functions
 
     // sync speed and position at every collision
     // client moves the ball
@@ -228,18 +220,12 @@ public class GameThread extends Thread {
         btSyncCounter = true;
     }
 
-    // server send functions
     private void btUpdateScore() {
         ca.sendMessage("score:" + score + ";" + scoreOpp);
     }
 
     private void btUpdateBatPosition() {
         ca.sendMessage("bat:" + batX + ";" + batY + ";" + batOppX + ";" + batOppY);
-    }
-
-    // deprecated
-    private void btUpdateBallPosition() {
-        ca.sendMessage("ball:" + ballX + ";" + ballY);
     }
 
     // client send functions
@@ -264,14 +250,8 @@ public class GameThread extends Thread {
             Log.e("BT_RECEIVE", "bt received too short message");
         } else {
             switch (parts[0]) {
-                case "p": // deprecated
-                    btClientSetData(parts);
-                    break;
                 case "s":
                     btClientSetSync(parts);
-                    break;
-                case "ball":
-                    btClientSetBallPosition(parts[1]);
                     break;
                 case "bat":
                     btClientSetBatPosition(parts[1]);
@@ -299,80 +279,25 @@ public class GameThread extends Thread {
                 int tmp_bsX = Integer.parseInt(data[3]);
                 int tmp_bsY = Integer.parseInt(data[4]);
 
-                // TODO: tee diff summa muuttujat jotka purkaa sisältöään ball x ja y koordinaatteihin
-                if (!isServer) {
-                    float diffX = gameWidth - tmp_ballX - ballX;
-                    float diffY = gameHeight - tmp_ballY - ballY;
+                float diffX = gameWidth - tmp_ballX - ballX;
+                float diffY = gameHeight - tmp_ballY - ballY;
 
-                    ballDiffBufferX += diffX;
-                    ballDiffBufferY += diffY;
-
-                    if (DEBUG_show_debug) {
-                        DEBUG_sync_diff = "sync diff xy: " + diffX + " " + diffY;
-                    }
-                }
-
-                //ballX = gameWidth - tmp_ballX;
-                //ballY = gameHeight - tmp_ballY;
+                ballDiffBufferX = diffX;
+                ballDiffBufferY = diffY;
 
                 ballSpeedX = tmp_bsX * -1;
                 ballSpeedY = tmp_bsY * -1;
 
                 btClientConfirmSync();
+
+                if (DEBUG_show_debug) {
+                    DEBUG_sync_ball_diff = "ball diff xy: " + diffX + " " + diffY;
+                }
             } catch (Exception e) {
 
             }
         } else {
             Log.e("BT_SYNCPACKET", "wrong packet length: " + data.length);
-        }
-    }
-
-    // deprecated
-    private void btClientSetData(String[] data) {
-        /*
-        if (DEBUG_show_debug) {
-            DEBUG_datapacket = "";
-
-            for (String s : data) {
-                DEBUG_datapacket += s + " ";
-            }
-        }
-        */
-
-        if (data.length == 5) {
-            try {
-                float tmp_ballX = Float.parseFloat(data[1]);
-                float tmp_ballY = Float.parseFloat(data[2]);
-                float tmp_batX = Float.parseFloat(data[4]);
-                float tmp_batOppX = Float.parseFloat(data[3]);
-
-                // mirror
-                ballX = gameWidth - tmp_ballX;
-                ballY = gameHeight - tmp_ballY;
-                batOppX = gameWidth - tmp_batOppX - batWidth;
-                batX = gameWidth - tmp_batX - batWidth;
-            } catch (Exception e) {
-
-            }
-        } else {
-            Log.e("BT_DATAPACKET", "wrong packet length: " + data.length);
-        }
-    }
-
-    // deprecated
-    private void btClientSetBallPosition(String msg) {
-        // expected msg: x;y
-        //Log.d("BT_RECEIVE", msg);
-        String[] parts = msg.split(";");
-
-        try {
-            float tmp_ballX = Float.parseFloat(parts[0]);
-            float tmp_ballY = Float.parseFloat(parts[1]);
-
-            ballX = gameWidth - tmp_ballX;
-            ballY = gameHeight - tmp_ballY;
-        } catch (Exception e) {
-
         }
     }
 
@@ -393,8 +318,14 @@ public class GameThread extends Thread {
             batOppX = gameWidth - tmp_batOppX - batWidth;
             batOppY = gameHeight - tmp_batOppY;
 
-            batX = gameWidth - tmp_batX - batWidth;
+            float diffX = gameWidth - tmp_batX - batWidth - batX;
+
+            batDiffBufferX = diffX;
             batY = gameHeight - tmp_batY;
+
+            if (DEBUG_show_debug) {
+                DEBUG_sync_bat_diff = "bat diff x: " + diffX;
+            }
         } catch (Exception e) {
 
         }
@@ -508,11 +439,13 @@ public class GameThread extends Thread {
                 }
             }
         } else {
-            // smooths sync differ to reduce jitter
+
             if (DEBUG_show_debug) {
-                DEBUG_sync_diff = "diff buffer xy: " + ballDiffBufferX + " " + ballDiffBufferY;
+                DEBUG_sync_ball_buffer = "ball diff buffer xy: " + ballDiffBufferX + " " + ballDiffBufferY;
+                DEBUG_sync_bat_buffer = "bat diff buffer x: " + batDiffBufferX;
             }
 
+            // ball position sync smoothing
             if (Math.abs(ballDiffBufferX) < ballDiffThreshold || Math.abs(ballDiffBufferY) < ballDiffThreshold ) {
                 if (ballDiffBufferX > 0) {
                     ballDiffBufferX -= ballDiffSmooth;
@@ -528,15 +461,37 @@ public class GameThread extends Thread {
                 } else {
                     ballDiffBufferY += ballDiffSmooth;
                     ballY -= ballDiffSmooth;
-
                 }
             } else {
                 // skip smoothing when over threshold
+                Log.e("SMOOTH", "ball smoothing skipped!");
+
                 ballX += ballDiffBufferX;
                 ballDiffBufferX = 0;
 
                 ballY += ballDiffBufferY;
                 ballDiffBufferY = 0;
+            }
+
+            // bat position sync smoothing
+            if (Math.abs(batDiffBufferX) < batDiffThreshold) {
+                if (batDiffBufferX > 0) {
+                    if (batDiffBufferX > batDiffSmooth) {
+                        batDiffBufferX -= batDiffSmooth;
+                        batX += batDiffSmooth;
+                    }
+                } else {
+                    if (batDiffBufferX < batDiffSmooth) {
+                        batDiffBufferX += batDiffSmooth;
+                        batX -= batDiffSmooth;
+                    }
+                }
+            } else {
+                // skip smoothing
+                Log.e("SMOOTH", "bat smoothing skipped!");
+
+                batX += batDiffBufferX;
+                batDiffBufferX = 0;
             }
         }
     }
@@ -866,8 +821,10 @@ public class GameThread extends Thread {
         if (i == 2) return "ballX: " + ballX + " " + ballY;
         if (i == 3) return "batXY: " + batX + " " + batY + " batOppXY: " + batOppX + " " + batOppY;
         if (i == 4) return isClientTouchDown ? "isClientTD TRUE" : "isClientTD FALSE";
-        if (i == 5) return DEBUG_sync_diff;
-        if (i == 6) return DEBUG_sync_buffer;
+        if (i == 5) return DEBUG_sync_ball_buffer;
+        if (i == 6) return DEBUG_sync_ball_diff;
+        if (i == 7) return DEBUG_sync_bat_buffer;
+        if (i == 8) return DEBUG_sync_bat_diff;
         return "debug returns nothing";
     }
     //endregion
