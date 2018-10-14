@@ -102,11 +102,18 @@ public class GameThread extends Thread {
 
         // get screen resolution
         WindowManager wm = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
-        Display display = wm.getDefaultDisplay();
-        Point size = new Point();
-        display.getSize(size);
-        screenWidth = size.x;
-        screenHeight = size.y;
+        Display display = wm != null ? wm.getDefaultDisplay() : null;
+
+        if (wm != null) {
+            Point size = new Point();
+            display.getSize(size);
+            screenWidth = size.x;
+            screenHeight = size.y;
+        } else {
+            Log.e("GAMETHREAD", "cannot get default display, assuming fhd");
+            screenWidth = 1080;
+            screenHeight = 1920;
+        }
 
         int statusbarHeight = getStatusBarHeight(context);
 
@@ -180,6 +187,7 @@ public class GameThread extends Thread {
         btUpdateBatPosition();
         respawnBall();
 
+        //noinspection InfiniteLoopStatement
         while(true) {
             try {
                 Thread.sleep(targetMillis);
@@ -240,7 +248,7 @@ public class GameThread extends Thread {
 
     // receive functions
     // ConnectActivity.handler calls this
-    public void btReceiveMessage(String msg) {
+    void btReceiveMessage(String msg) {
         // Log.d("BT_RECEIVE", msg);
         // expected msg: type:variable
 
@@ -293,7 +301,7 @@ public class GameThread extends Thread {
                 if (DEBUG_show_debug) {
                     DEBUG_sync_ball_diff = "ball diff xy: " + diffX + " " + diffY;
                 }
-            } catch (Exception e) {
+            } catch (Exception ignored) {
 
             }
         } else {
@@ -326,7 +334,7 @@ public class GameThread extends Thread {
             if (DEBUG_show_debug) {
                 DEBUG_sync_bat_diff = "bat diff x: " + diffX;
             }
-        } catch (Exception e) {
+        } catch (Exception ignored) {
 
         }
     }
@@ -343,7 +351,7 @@ public class GameThread extends Thread {
             score = Integer.parseInt(parts[1]);
 
             cv.showScore(180);
-        } catch (Exception e) {
+        } catch (Exception ignored) {
 
         }
     }
@@ -370,7 +378,7 @@ public class GameThread extends Thread {
                     batClientMoveDirection = -1;
                 }
             }
-        } catch (Exception e) {
+        } catch (Exception ignored) {
 
         }
     }
@@ -388,6 +396,7 @@ public class GameThread extends Thread {
     //region Thread functions
     private void ballWiggle() {
         // TODO: this is shit, do it again.
+        // anyways, this stays disabled for now
         wiggle++;
 
         if (wiggle >= ballWiggleInterval) {
@@ -504,6 +513,8 @@ public class GameThread extends Thread {
             if (isServer) {
                 score(OPPONENT);
             }
+
+            return;
         }
 
         // player scores
@@ -513,6 +524,8 @@ public class GameThread extends Thread {
             if (isServer) {
                 score(PLAYER);
             }
+
+            return;
         }
 
         // left side collision
@@ -525,6 +538,8 @@ public class GameThread extends Thread {
             if (isServer) {
                 btUpdateSync();
             }
+
+            return;
         }
 
         // right side collision
@@ -537,6 +552,8 @@ public class GameThread extends Thread {
             if (isServer) {
                 btUpdateSync();
             }
+
+            return;
         }
 
         // player bat collision check
@@ -553,6 +570,8 @@ public class GameThread extends Thread {
                 if (isServer) {
                     btUpdateSync();
                 }
+
+                return;
             }
         }
 
@@ -597,7 +616,6 @@ public class GameThread extends Thread {
                 batOppX = gameWidth - batWidth;
             }
         }
-
 
         // actual moving here
         if (isTouchDown) {
@@ -702,7 +720,7 @@ public class GameThread extends Thread {
         Log.d("RESPAWN","ball");
     }
 
-    public void touchEvent(MotionEvent event) {
+    void touchEvent(MotionEvent event) {
         touchX = event.getX();
         touchY = event.getY();
 
@@ -745,7 +763,7 @@ public class GameThread extends Thread {
         Log.d("TOUCH_EVENT", "xy: " + touchX + ", " + touchY);
     }
 
-    public int getStatusBarHeight(Context context) {
+    private int getStatusBarHeight(Context context) {
         int result = 0;
         int resourceId = context.getResources().getIdentifier("status_bar_height", "dimen", "android");
 
@@ -757,66 +775,66 @@ public class GameThread extends Thread {
     //endregion
 
     //region Getters for CustomView
-    public int getBatX() {
+    int getBatX() {
         return Math.round(batX * scaleX);
     }
 
-    public int getBatY() {
+    int getBatY() {
         return Math.round(batY * scaleY);
     }
 
-    public int getBatOppX() {
+    int getBatOppX() {
         return Math.round(batOppX * scaleX);
     }
 
-    public int getBatOppY() {
+    int getBatOppY() {
         return Math.round(batOppY * scaleY);
     }
 
-    public int getBatWidth() {
+    int getBatWidth() {
         return Math.round(batWidth * scaleX);
     }
 
-    public int getBatHeight() {
+    int getBatHeight() {
         return Math.round(batHeight * scaleY);
     }
 
-    public int getBallX() {
+    int getBallX() {
         return Math.round(ballX * scaleX);
     }
 
-    public int getBallY() {
+    int getBallY() {
         return Math.round(ballY * scaleY);
     }
 
-    public int getBallSide() {
+    int getBallSide() {
         return Math.round(ballSide * scaleX);
     }
 
-    public float getScoreX() {
+    float getScoreX() {
         return Math.round(scoreX * scaleX);
     }
 
-    public float getScoreY() {
+    float getScoreY() {
         return Math.round(scoreY * scaleY);
     }
 
-    public int getScore() {
+    int getScore() {
         return score;
     }
 
-    public int getScoreOpp() {
+    int getScoreOpp() {
         return scoreOpp;
     }
     //endregion
 
     //region DEBUG
-    public boolean getDebug_show() {
+    boolean getDebug_show() {
         return DEBUG_show_debug;
     }
 
     // TODO: utterly horrible, but it's debug shit so who cares.
-    public String getDebug_msg(int i) {
+    String getDebug_msg(int i) {
         if (i == 1) return isServer ? "isServer TRUE" : "isServer FALSE";
         if (i == 2) return "ballX: " + ballX + " " + ballY;
         if (i == 3) return "batXY: " + batX + " " + batY + " batOppXY: " + batOppX + " " + batOppY;
