@@ -54,6 +54,10 @@ public class GameThread extends Thread {
     private float batOppY;
     private float ballX;
     private float ballY;
+    private float ballDiffBufferX;
+    private float ballDiffBufferY;
+    private float ballDiffSmooth = 1;
+    private float ballDiffThreshold = 100;
 
     private float batWidth;
     private float batHeight;
@@ -72,7 +76,8 @@ public class GameThread extends Thread {
     private boolean DEBUG_automove_player;
     private boolean DEBUG_automove_opponent;
     private boolean DEBUG_show_debug;
-    private String DEBUG_datapacket = "";
+    private String DEBUG_sync_diff = "";
+    private String DEBUG_sync_buffer = "";
 
     private final int PLAYER = 0;   // TODO: do this type safely
     private final int OPPONENT = 1; // TODO: and this
@@ -110,7 +115,7 @@ public class GameThread extends Thread {
         scaleY = (screenHeight - statusbarHeight) / gameHeight;
 
         // starting parameters
-        batMove = 20;                    // bat moving speed
+        batMove = 20;                   // bat moving speed
         batWidth = 200;                 //
         batHeight = 15;                 //
         ballSide = 15;                  // ball width and height
@@ -133,16 +138,12 @@ public class GameThread extends Thread {
         scoreY = gameHeight / 3;
 
         // POINT    = one point per death
-        // SPEED    = ball's current speed per death
+        // SPEED    = speed equals points
         scoringScheme = ScoringScheme.SPEED;
 
         DEBUG_automove_player = false;
         DEBUG_automove_opponent = false;
-        DEBUG_show_debug = false;
-
-        respawnBall();
-        btUpdateSync();
-        btUpdateBatPosition();
+        DEBUG_show_debug = true;
 
         this.cv = new CustomView(context, this, activity);
 
@@ -164,6 +165,9 @@ public class GameThread extends Thread {
     public void run() {
         Log.d("GAMETHREAD", "thread running");
 
+        btUpdateBatPosition();
+        respawnBall();
+
         while(true) {
             try {
                 Thread.sleep(targetMillis);
@@ -173,10 +177,10 @@ public class GameThread extends Thread {
 
             ballMove();
             collisionCheck();
+            btSync();
 
             if (isServer) {
-                ballWiggle();
-                btSync();
+                //ballWiggle();
                 batMove();
             }
 
@@ -184,10 +188,7 @@ public class GameThread extends Thread {
         }
     }
 
-    // ----------------------------------
-    // ------ BLUETOOTH FUNCTIONS -------
-    // ----------------------------------
-    //region BLUETOOTH
+    //region Bluetooth
 
     // deprecated
     private void btUpdateData() {
@@ -214,13 +215,13 @@ public class GameThread extends Thread {
     // sync speed and position at every collision
     // client moves the ball
     private void btUpdateSync() {
-        String sync = "s:";
-        sync += ballX + ":";
-        sync += ballY + ":";
-        sync += ballSpeedX + ":";
-        sync += ballSpeedY + ":";
+        String syncmsg = "s:";
+        syncmsg += ballX + ":";
+        syncmsg += ballY + ":";
+        syncmsg += ballSpeedX + ":";
+        syncmsg += ballSpeedY + ":";
 
-        ca.sendMessage(sync);
+        ca.sendMessage(syncmsg);
 
         // server begins to wait for sync confirmation
         this.sync = 0;
@@ -238,7 +239,7 @@ public class GameThread extends Thread {
 
     // deprecated
     private void btUpdateBallPosition() {
-        ca.sendMessage("b:" + ballX + ";" + ballY);
+        ca.sendMessage("ball:" + ballX + ";" + ballY);
     }
 
     // client send functions
@@ -291,14 +292,6 @@ public class GameThread extends Thread {
     }
 
     private void btClientSetSync(String[] data) {
-        if (DEBUG_show_debug) {
-            DEBUG_datapacket = "";
-
-            for (String s : data) {
-                DEBUG_datapacket += s + " ";
-            }
-        }
-
         if (data.length == 5) {
             try {
                 float tmp_ballX = Float.parseFloat(data[1]);
@@ -306,8 +299,22 @@ public class GameThread extends Thread {
                 int tmp_bsX = Integer.parseInt(data[3]);
                 int tmp_bsY = Integer.parseInt(data[4]);
 
-                ballX = gameWidth - tmp_ballX;
-                ballY = gameHeight - tmp_ballY;
+                // TODO: tee diff summa muuttujat jotka purkaa sisältöään ball x ja y koordinaatteihin
+                if (!isServer) {
+                    float diffX = gameWidth - tmp_ballX - ballX;
+                    float diffY = gameHeight - tmp_ballY - ballY;
+
+                    ballDiffBufferX += diffX;
+                    ballDiffBufferY += diffY;
+
+                    if (DEBUG_show_debug) {
+                        DEBUG_sync_diff = "sync diff xy: " + diffX + " " + diffY;
+                    }
+                }
+
+                //ballX = gameWidth - tmp_ballX;
+                //ballY = gameHeight - tmp_ballY;
+
                 ballSpeedX = tmp_bsX * -1;
                 ballSpeedY = tmp_bsY * -1;
 
@@ -322,6 +329,7 @@ public class GameThread extends Thread {
 
     // deprecated
     private void btClientSetData(String[] data) {
+        /*
         if (DEBUG_show_debug) {
             DEBUG_datapacket = "";
 
@@ -329,6 +337,7 @@ public class GameThread extends Thread {
                 DEBUG_datapacket += s + " ";
             }
         }
+        */
 
         if (data.length == 5) {
             try {
@@ -444,10 +453,8 @@ public class GameThread extends Thread {
     }
 
     //endregion
-    // ----------------------------------
-    // --- END OF BLUETOOTH FUNCTIONS ---
-    // ----------------------------------
 
+    //region Thread functions
     private void ballWiggle() {
         // TODO: this is shit, do it again.
         wiggle++;
@@ -489,13 +496,47 @@ public class GameThread extends Thread {
     }
 
     private void btSync() {
-        if (btSyncCounter) {
-            sync++;
+        if (isServer) {
+            // this runs when the server waits for sync confirmation
+            if (btSyncCounter) {
+                sync++;
 
-            if (sync > btSyncWaitCount) {
-                sync = 0;
-                btUpdateSync();
-                Log.e("BT_SYNC", "sync counter reached target, sending new sync");
+                if (sync > btSyncWaitCount) {
+                    sync = 0;
+                    btUpdateSync();
+                    Log.e("BT_SYNC", "sync counter reached target, sending new sync");
+                }
+            }
+        } else {
+            // smooths sync differ to reduce jitter
+            if (DEBUG_show_debug) {
+                DEBUG_sync_diff = "diff buffer xy: " + ballDiffBufferX + " " + ballDiffBufferY;
+            }
+
+            if (Math.abs(ballDiffBufferX) < ballDiffThreshold || Math.abs(ballDiffBufferY) < ballDiffThreshold ) {
+                if (ballDiffBufferX > 0) {
+                    ballDiffBufferX -= ballDiffSmooth;
+                    ballX += ballDiffSmooth;
+                } else {
+                    ballDiffBufferX += ballDiffSmooth;
+                    ballX -= ballDiffSmooth;
+                }
+
+                if (ballDiffBufferY > 0) {
+                    ballDiffBufferY -= ballDiffSmooth;
+                    ballY += ballDiffSmooth;
+                } else {
+                    ballDiffBufferY += ballDiffSmooth;
+                    ballY -= ballDiffSmooth;
+
+                }
+            } else {
+                // skip smoothing when over threshold
+                ballX += ballDiffBufferX;
+                ballDiffBufferX = 0;
+
+                ballY += ballDiffBufferY;
+                ballDiffBufferY = 0;
             }
         }
     }
@@ -631,7 +672,9 @@ public class GameThread extends Thread {
             btUpdateBatPosition();
         }
     }
+    //endregion
 
+    //region Utility
     private void score(int side) {
         // 0 = player
         // 1 = opponent
@@ -697,8 +740,10 @@ public class GameThread extends Thread {
         ballSpeedY = ballSpeedDefault;
         ballSpeedX = ballSpeedDefault;
 
-        btUpdateSync();
+        ballDiffBufferX = 0;
+        ballDiffBufferY = 0;
 
+        btUpdateSync();
         Log.d("RESPAWN","ball");
     }
 
@@ -754,8 +799,9 @@ public class GameThread extends Thread {
         }
         return result;
     }
+    //endregion
 
-    // getters for CustomView
+    //region Getters for CustomView
     public int getBatX() {
         return Math.round(batX * scaleX);
     }
@@ -807,8 +853,9 @@ public class GameThread extends Thread {
     public int getScoreOpp() {
         return scoreOpp;
     }
+    //endregion
 
-    // FOR DEBUGGING PURPOSES
+    //region DEBUG
     public boolean getDebug_show() {
         return DEBUG_show_debug;
     }
@@ -819,7 +866,9 @@ public class GameThread extends Thread {
         if (i == 2) return "ballX: " + ballX + " " + ballY;
         if (i == 3) return "batXY: " + batX + " " + batY + " batOppXY: " + batOppX + " " + batOppY;
         if (i == 4) return isClientTouchDown ? "isClientTD TRUE" : "isClientTD FALSE";
-        if (i == 5) return DEBUG_datapacket;
+        if (i == 5) return DEBUG_sync_diff;
+        if (i == 6) return DEBUG_sync_buffer;
         return "debug returns nothing";
     }
+    //endregion
 }
