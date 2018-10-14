@@ -132,7 +132,7 @@ public class GameThread extends Thread {
         batWidth = 200;                 //
         batHeight = 15;                 //
         ballSide = 15;                  // ball width and height
-        ballSpeedDefault = 1;           // ball speed at spawn
+        ballSpeedDefault = 3;           // ball speed at spawn
         ballSpeedIncrease = 1;          // for each bat hit
         ballSpeedMax = 10;              // max speed. increase frame rate _when_ problems occur.
         score = 0;                      //
@@ -214,7 +214,7 @@ public class GameThread extends Thread {
 
     // sync speed and position at every collision
     // client moves the ball
-    private void btUpdateSync() {
+    private void btUpdateSync(boolean counter) {
         String syncmsg = "s:";
         syncmsg += ballX + ":";
         syncmsg += ballY + ":";
@@ -225,7 +225,7 @@ public class GameThread extends Thread {
 
         // server begins to wait for sync confirmation
         this.sync = 0;
-        btSyncCounter = true;
+        btSyncCounter = counter;
     }
 
     private void btUpdateScore() {
@@ -411,7 +411,7 @@ public class GameThread extends Thread {
             Log.d("WIGGLE", "wiggled ball speed y: " + n);
 
             wiggle = 0;
-            btUpdateSync();
+            btUpdateSync(true);
         }
     }
 
@@ -442,9 +442,10 @@ public class GameThread extends Thread {
                 sync++;
 
                 if (sync > btSyncWaitCount) {
-                    sync = 0;
-                    btUpdateSync();
-                    Log.e("BT_SYNC", "sync counter reached target, sending new sync");
+                    btUpdateSync(true);
+                    // because bt is absolute garbage, this shit happens all the fucking time.
+                    // have fun.
+                    //Log.e("BT_SYNC", "sync counter reached target, sending new sync");
                 }
             }
         } else {
@@ -540,7 +541,7 @@ public class GameThread extends Thread {
             ballX = 0; // prevents double collision
 
             if (isServer) {
-                btUpdateSync();
+                btUpdateSync(true);
             }
 
             return;
@@ -554,7 +555,7 @@ public class GameThread extends Thread {
             ballX = gameWidth - ballSide; // same
 
             if (isServer) {
-                btUpdateSync();
+                btUpdateSync(true);
             }
 
             return;
@@ -572,7 +573,7 @@ public class GameThread extends Thread {
                 ballY = batY - batHeight;
 
                 if (isServer) {
-                    btUpdateSync();
+                    btUpdateSync(true);
                 }
 
                 return;
@@ -591,7 +592,7 @@ public class GameThread extends Thread {
                 ballY = batOppY + batHeight;
 
                 if (isServer) {
-                    btUpdateSync();
+                    btUpdateSync(true);
                 }
             }
         }
@@ -716,6 +717,8 @@ public class GameThread extends Thread {
             ballSpeedX = ballSpeedDefault;
             ballX = ballDefaultX;
             ballY = ballDefaultY;
+
+            btUpdateSync(true);
         } else {
             ballX = gameWidth - ballDefaultX;
             ballY = gameHeight - ballDefaultY;
@@ -726,7 +729,7 @@ public class GameThread extends Thread {
         ballDiffBufferX = 0;
         ballDiffBufferY = 0;
 
-        btUpdateSync();
+
         Log.d("RESPAWN","ball");
     }
 

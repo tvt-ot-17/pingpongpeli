@@ -322,6 +322,7 @@ public class ChatController {
         }
 
         public void run() {
+            android.os.Process.setThreadPriority(19);
             byte[] buffer = new byte[1024];
             int bytes;
 
